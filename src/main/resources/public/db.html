@@ -1,0 +1,29 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DB Viewer</title>
+<style>
+body{font-family:sans-serif;margin:20px;background:#1e1e2e;color:#eee}
+button{margin:2px;padding:6px 12px;border:0;border-radius:5px;background:#89b4fa;cursor:pointer}
+textarea{width:100%;height:80px;font-family:monospace;background:#11111b;color:#a6e3a1;border:1px solid #555;padding:8px}
+.w{overflow-x:auto}table{border-collapse:collapse;background:#313244;margin-top:10px}
+th,td{border:1px solid #555;padding:5px 10px}th{background:#45475a}
+</style></head><body>
+<h1>🗄️ Database Viewer (read-only)</h1><a href="/" style="color:#89b4fa">← Hospital App</a><br><br>
+<div id="tb"></div>
+<textarea id="q">select * from patients</textarea><br>
+<button onclick="run()">▶ Run SELECT</button>
+<div class="w" id="o"></div>
+<script>
+const T=['patients','doctors','appointments','treatments','medicines','prescriptions','bills'];
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.getElementById('tb').innerHTML = T.map(t => `<button onclick="pick('${t}')">${t}</button>`).join('');
+function pick(t){ document.getElementById('q').value='select * from '+t+' order by id'; run(); }
+async function run(){
+  const r = await fetch('/api/sql',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:document.getElementById('q').value})});
+  const d = await r.json(), o = document.getElementById('o');
+  if(!r.ok){ o.textContent = d.error; return; }
+  if(!d.length){ o.textContent='No rows'; return; }
+  const c = Object.keys(d[0]);
+  o.innerHTML = '<table><tr>'+c.map(x=>`<th>${x}</th>`).join('')+'</tr>'+d.map(r=>'<tr>'+c.map(x=>`<td>${esc(r[x])}</td>`).join('')+'</tr>').join('')+'</table>';
+}
+pick('patients');
+</script></body></html>

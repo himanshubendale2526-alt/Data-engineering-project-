@@ -1,0 +1,101 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>City Hospital</title>
+<style>
+:root{--b:#0b6bcb;--d:#06427f;--bg:#f1f5f9}
+*{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;background:var(--bg);color:#1e293b}
+header{background:linear-gradient(120deg,var(--d),var(--b));color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header h1{margin:0;font-size:22px}header a{color:#fff;opacity:.85;margin-left:14px;text-decoration:none}
+#clk{font-variant-numeric:tabular-nums;font-size:14px}
+nav{display:flex;gap:6px;padding:12px 22px;overflow-x:auto;background:#fff;box-shadow:0 1px 4px #0001;position:sticky;top:0}
+nav button{white-space:nowrap;padding:8px 14px;border:0;border-radius:20px;background:#e2e8f0;cursor:pointer;font-size:14px}
+nav button.on{background:var(--b);color:#fff}
+main{padding:18px 22px;max-width:1200px;margin:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 6px #0001}
+.card b{display:block;font-size:28px;color:var(--b)}.card span{font-size:13px;color:#64748b}
+.card.warn b{color:#dc2626}
+.box{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 6px #0001;margin-bottom:16px}
+h3{margin:0 0 10px}
+form{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:#64748b;gap:3px}
+input,select{padding:8px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;min-width:130px}
+.add{padding:9px 18px;background:#16a34a;color:#fff;border:0;border-radius:8px;cursor:pointer}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.bar input{flex:1;min-width:180px}.bar button{padding:8px 12px;border:0;border-radius:8px;background:#e2e8f0;cursor:pointer}
+.w{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}
+th{background:#eff6ff;text-align:left;padding:9px;white-space:nowrap}td{padding:9px;border-top:1px solid #e2e8f0}
+tr:hover td{background:#f8fafc}
+.pill{border:0;border-radius:12px;padding:4px 12px;color:#fff;cursor:pointer}.ok{background:#16a34a}.no{background:#dc2626}
+.x{border:0;background:none;cursor:pointer;font-size:16px}.mut{color:#94a3b8;padding:14px}
+</style></head><body>
+<header><h1>🏥 City Hospital</h1><div><span id="clk"></span><a href="/db.html">🗄️ Database</a></div></header>
+<nav id="tabs"></nav>
+<main>
+<section id="dash">
+  <div class="bar"><h3 style="margin:0">Dashboard</h3><input type="date" id="dd" style="flex:none" onchange="dash()"><button onclick="$('dd').value=today();dash()">Aaj</button></div>
+  <div class="cards" id="cards"></div>
+  <div class="box"><h3>📅 Ya divsache appointments</h3><div class="w" id="tl"></div></div>
+  <div class="box"><h3>🆕 Navin patients</h3><div class="w" id="rc"></div></div>
+</section>
+<section id="app" style="display:none">
+  <div class="box"><h3 id="ft"></h3><form id="f"></form></div>
+  <div class="box">
+    <div class="bar"><input id="q" placeholder="🔍 Search (name, phone, diagnosis...)" oninput="render()">
+      <input type="date" id="d" onchange="render()"><button onclick="$('d').value=today();render()">Aaj</button>
+      <button onclick="$('q').value='';$('d').value='';render()">Clear</button><span id="cnt"></span></div>
+    <div class="w" id="t"></div>
+  </div>
+</section>
+</main>
+<script>
+const F={
+patients:[['name','Name'],['age','Age','number'],['gender','Gender','sel:Male,Female,Other'],['phone','Phone'],['address','Address'],['admitted_on','Admit date','date']],
+doctors:[['name','Name'],['specialization','Specialization'],['phone','Phone'],['fee','Fee','number']],
+appointments:[['patient_id','Patient','ref:patients'],['doctor_id','Doctor','ref:doctors'],['appt_date','Date','date'],['appt_time','Time','time'],['status','Status','sel:Scheduled,Arrived,Completed,Cancelled']],
+treatments:[['patient_id','Patient','ref:patients'],['doctor_id','Doctor','ref:doctors'],['diagnosis','Diagnosis'],['treatment','Treatment'],['treated_on','Date','date']],
+medicines:[['name','Name'],['price','Price','number'],['stock','Stock','number']],
+prescriptions:[['patient_id','Patient','ref:patients'],['medicine_id','Medicine','ref:medicines'],['dosage','Dosage'],['days','Days','number']],
+bills:[['patient_id','Patient','ref:patients'],['amount','Amount','number'],['paid','Paid?','sel:false,true'],['billed_on','Date','date']]};
+const S=['Scheduled','Arrived','Completed','Cancelled'];
+const $=id=>document.getElementById(id);
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async(u,o)=>{const r=await fetch(u,o);const j=await r.json();if(!r.ok)throw new Error(j.error);return j};
+const J=(m,b)=>({method:m,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+let cur='dash',data=[];
+$('tabs').innerHTML=`<button id="b_dash" onclick="show('dash')">📊 Dashboard</button>`+Object.keys(F).map(k=>`<button id="b_${k}" onclick="show('${k}')">${k[0].toUpperCase()+k.slice(1)}</button>`).join('');
+setInterval(()=>{$('clk').textContent=new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'medium'});if(cur=='dash')dash()},1000*1);
+setInterval(()=>{if(cur=='dash')dash()},30000);
+function tbl(rows,fn){if(!rows.length)return'<div class="mut">Kahi nahi</div>';const c=Object.keys(rows[0]);
+ return'<table><tr>'+c.map(x=>`<th>${x}</th>`).join('')+'</tr>'+rows.map(r=>'<tr>'+c.map(x=>`<td>${fn?fn(r,x):esc(r[x])}</td>`).join('')+'</tr>').join('')+'</table>'}
+async function show(t){cur=t;document.querySelectorAll('nav button').forEach(b=>b.className=b.id=='b_'+t?'on':'');
+ $('dash').style.display=t=='dash'?'':'none';$('app').style.display=t=='dash'?'none':'';
+ if(t=='dash'){if(!$('dd').value)$('dd').value=today();return dash()}
+ $('q').value='';$('d').value='';$('ft').textContent='➕ New '+t;await form();await load()}
+async function dash(){if(!$('dd').value)$('dd').value=today();
+ const j=await api('/api/dash?date='+$('dd').value),s=j.stats;
+ $('cards').innerHTML=[['Patients',s.patients],['Doctors',s.doctors],['Appointments (ya divshi)',s.today],['Unpaid bills ₹',s.unpaid,1],['Low stock medicines',s.low,s.low>0]]
+  .map(c=>`<div class="card ${c[2]?'warn':''}"><b>${c[1]}</b><span>${c[0]}</span></div>`).join('');
+ $('tl').innerHTML=tbl(j.list.map(({id,...r})=>r));$('rc').innerHTML=tbl(j.recent)}
+async function form(){let h='';
+ for(const[k,l,ty]of F[cur]){
+  if(ty&&ty.startsWith('ref:')){const rows=await api('/api/'+ty.slice(4));
+   h+=`<label>${l}<select name="${k}" required><option value="">Select...</option>${rows.map(r=>`<option value="${r.id}">${esc(r.name)} (#${r.id})</option>`).join('')}</select></label>`}
+  else if(ty&&ty.startsWith('sel:'))h+=`<label>${l}<select name="${k}">${ty.slice(4).split(',').map(o=>`<option>${o}</option>`).join('')}</select></label>`;
+  else h+=`<label>${l}<input name="${k}" type="${ty||'text'}" ${ty=='date'?`value="${today()}"`:''} ${ty=='number'?'step="any"':''}></label>`}
+ $('f').innerHTML=h+'<button class="add">+ Add</button>'}
+$('f').onsubmit=async e=>{e.preventDefault();
+ try{await api('/api/'+cur,J('POST',Object.fromEntries(new FormData(e.target))));await form();await load()}catch(x){alert(x.message)}};
+async function load(){data=await api('/api/'+cur);render()}
+function render(){const q=$('q').value.toLowerCase(),d=$('d').value;
+ const rows=data.filter(r=>{const v=Object.values(r).map(x=>String(x??''));return(!q||v.join(' ').toLowerCase().includes(q))&&(!d||v.includes(d))});
+ $('cnt').textContent=rows.length+' records';
+ $('t').innerHTML=tbl(rows,(r,c)=>{
+  if(cur=='appointments'&&c=='status')return`<select onchange="upd(${r.id},'status',this.value)">${S.map(o=>`<option ${o==r.status?'selected':''}>${o}</option>`).join('')}</select>`;
+  if(cur=='bills'&&c=='paid')return`<button class="pill ${r.paid?'ok':'no'}" onclick="upd(${r.id},'paid','${!r.paid}')">${r.paid?'Paid':'Unpaid'}</button>`;
+  if(c=='id')return`#${r.id} <button class="x" onclick="del(${r.id})">🗑</button>`;
+  return esc(r[c])})}
+async function upd(id,col,val){try{await api(`/api/${cur}/${id}`,J('PATCH',{col,val}));load()}catch(x){alert(x.message)}}
+async function del(id){if(confirm('Delete karaycha?')){await api(`/api/${cur}/${id}`,{method:'DELETE'});load()}}
+show('dash');
+</script></body></html>
